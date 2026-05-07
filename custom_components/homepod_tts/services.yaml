@@ -1,0 +1,42 @@
+say:
+  name: Say
+  description: Play a TTS message with optional chime on a HomePod.
+  fields:
+    entity_id:
+      name: Entity
+      description: The homepod_tts notify entity to use.
+      required: true
+      selector:
+        entity:
+          integration: homepod_tts
+          domain: notify
+    message:
+      name: Message
+      description: The text to speak.
+      required: true
+      example: "Paczka czeka w skrytce numer 5"
+      selector:
+        text:
+    chime:
+      name: Chime
+      description: Play chime before announcement (overrides default).
+      required: false
+      default: true
+      selector:
+        boolean:
+    volume_level:
+      name: Volume level
+      description: Announcement volume 0.0–1.0 (overrides default).
+      required: false
+      selector:
+        number:
+          min: 0.0
+          max: 1.0
+          step: 0.05
+          mode: slider
+    compress:
+      name: Compress TTS
+      description: Apply dynamic range compression to TTS audio (overrides default).
+      required: false
+      selector:
+        boolean:

@@ -1,0 +1,37 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "This HomePod is already configured.",
+      "no_apple_tv_entries": "No Apple TV integrations found. Please set up the Apple TV integration first."
+    },
+    "error": {
+      "invalid_api_key": "Invalid Gemini API key."
+    },
+    "step": {
+      "user": {
+        "title": "HomePod TTS Setup",
+        "description": "Configure a HomePod for TTS announcements via Gemini.",
+        "data": {
+          "name": "Friendly name",
+          "homepod_identifier": "HomePod device",
+          "gemini_api_key": "Gemini API key"
+        }
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "HomePod TTS Options",
+        "data": {
+          "chime_enabled": "Play chime before announcement",
+          "chime_path": "Custom chime file path (leave empty for default)",
+          "default_volume": "Announcement volume",
+          "restore_volume": "Restore volume after announcement",
+          "tts_voice": "TTS voice",
+          "compress_tts": "Compress TTS audio (dynamic range compression)"
+        }
+      }
+    }
+  }
+}
