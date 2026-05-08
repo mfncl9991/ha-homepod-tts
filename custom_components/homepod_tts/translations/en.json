@@ -13,7 +13,7 @@
         "description": "Configure a HomePod for TTS announcements via Gemini.",
         "data": {
           "name": "Friendly name",
-          "homepod_identifier": "HomePod device",
+          "homepod_identifier": "Default HomePod device",
           "gemini_api_key": "Gemini API key"
         }
       }
@@ -24,12 +24,18 @@
       "init": {
         "title": "HomePod TTS Options",
         "data": {
+          "tts_model": "Gemini TTS model",
+          "tts_voice": "TTS voice",
+          "tts_prompt": "Default style prompt (e.g. 'Say this calmly')",
           "chime_enabled": "Play chime before announcement",
           "chime_path": "Custom chime file path (leave empty for default)",
+          "chime_volume": "Chime volume in audio mix (1.0 = unchanged)",
+          "chime_offset": "Chime-TTS offset in ms (negative trims chime tail)",
           "default_volume": "Announcement volume",
           "restore_volume": "Restore volume after announcement",
-          "tts_voice": "TTS voice",
-          "compress_tts": "Compress TTS audio (dynamic range compression)"
+          "compress_tts": "TTS audio compression",
+          "cache_enabled": "Cache TTS audio (avoid re-generating same content)",
+          "cache_max_mb": "Maximum cache size"
         }
       }
     }

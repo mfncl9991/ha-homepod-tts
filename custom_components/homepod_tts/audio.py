@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 from .const import (
     AIRPLAY_CHANNELS,
     AIRPLAY_SAMPLE_RATE,
+    COMPRESS_PRESETS,
     GEMINI_TTS_CHANNELS,
     GEMINI_TTS_SAMPLE_RATE,
 )
@@ -14,10 +15,19 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-COMPRESSOR_FILTER = (
-    "acompressor=threshold=-19dB:ratio=5:attack=7"
-    ":release=450:makeup=4:detection=rms"
-)
+async def _get_audio_duration(ffmpeg_bin: str, path: str) -> float:
+    proc = await asyncio.create_subprocess_exec(
+        ffmpeg_bin, "-i", path, "-f", "null", "-",
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    _, stderr = await proc.communicate()
+    for line in stderr.decode(errors="replace").splitlines():
+        if "Duration:" in line:
+            parts = line.split("Duration:")[1].split(",")[0].strip()
+            h, m, s = parts.split(":")
+            return int(h) * 3600 + int(m) * 60 + float(s)
+    return 0.0
 
 
 async def async_generate_wav(
@@ -25,15 +35,37 @@ async def async_generate_wav(
     tts_pcm: bytes,
     chime_path: str | None,
     output_path: str,
-    compress_tts: bool = True,
+    compress_preset: str = "moderate",
+    offset_ms: int = 0,
+    chime_volume: float = 1.0,
 ) -> None:
     ffmpeg_bin = get_ffmpeg_manager(hass).binary
 
-    tts_filters = f"aresample={AIRPLAY_SAMPLE_RATE},aformat=sample_fmts=s16:channel_layouts=stereo"
-    if compress_tts:
-        tts_filters += f",{COMPRESSOR_FILTER}"
+    compressor = COMPRESS_PRESETS.get(compress_preset)
+
+    tts_filters = (
+        f"aresample={AIRPLAY_SAMPLE_RATE},"
+        f"aformat=sample_fmts=s16:channel_layouts=stereo"
+    )
+    if compressor:
+        tts_filters += f",{compressor}"
 
     if chime_path:
+        chime_filters = (
+            f"aresample={AIRPLAY_SAMPLE_RATE},"
+            f"aformat=sample_fmts=s16:channel_layouts=stereo"
+        )
+
+        if chime_volume != 1.0:
+            chime_filters += f",volume={chime_volume:.2f}"
+
+        if offset_ms < 0:
+            duration = await _get_audio_duration(ffmpeg_bin, chime_path)
+            trim_end = max(0.1, duration + offset_ms / 1000)
+            chime_filters += f",atrim=end={trim_end:.3f}"
+        elif offset_ms > 0:
+            chime_filters += f",apad=pad_dur={offset_ms / 1000:.3f}"
+
         cmd = [
             ffmpeg_bin,
             "-y",
@@ -44,7 +76,7 @@ async def async_generate_wav(
             "-i", "pipe:0",
             "-filter_complex",
             (
-                f"[0:a]aresample={AIRPLAY_SAMPLE_RATE},aformat=sample_fmts=s16:channel_layouts=stereo[a0];"
+                f"[0:a]{chime_filters}[a0];"
                 f"[1:a]{tts_filters}[a1];"
                 "[a0][a1]concat=n=2:v=0:a=1[out]"
             ),

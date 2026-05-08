@@ -17,6 +17,21 @@ say:
       example: "Paczka czeka w skrytce numer 5"
       selector:
         text:
+    prompt:
+      name: Style prompt
+      description: Style instructions for the TTS voice (e.g. "Say this in a calm whisper"). Overrides the default prompt.
+      required: false
+      example: "Say this gently and calmly"
+      selector:
+        text:
+    speaker:
+      name: Speaker
+      description: Target a different HomePod (apple_tv media_player entity). Overrides the default speaker.
+      required: false
+      selector:
+        entity:
+          integration: apple_tv
+          domain: media_player
     chime:
       name: Chime
       description: Play chime before announcement (overrides default).
@@ -24,9 +39,19 @@ say:
       default: true
       selector:
         boolean:
+    chime_volume:
+      name: Chime volume
+      description: Relative chime volume in the audio mix (0.0-2.0, 1.0 = unchanged). Overrides default.
+      required: false
+      selector:
+        number:
+          min: 0.0
+          max: 2.0
+          step: 0.1
+          mode: slider
     volume_level:
       name: Volume level
-      description: Announcement volume 0.0–1.0 (overrides default).
+      description: Announcement volume 0.0-1.0 (overrides default).
       required: false
       selector:
         number:
@@ -35,8 +60,28 @@ say:
           step: 0.05
           mode: slider
     compress:
-      name: Compress TTS
-      description: Apply dynamic range compression to TTS audio (overrides default).
+      name: Compression
+      description: Dynamic range compression preset for TTS audio (overrides default).
       required: false
       selector:
-        boolean:
+        select:
+          options:
+            - "off"
+            - "light"
+            - "moderate"
+            - "heavy"
+    offset:
+      name: Chime offset (ms)
+      description: Offset between chime and TTS in milliseconds. Negative values trim the chime tail to reduce the gap (overrides default).
+      required: false
+      selector:
+        number:
+          min: -5000
+          max: 5000
+          step: 100
+          unit_of_measurement: ms
+          mode: slider
+
+clear_cache:
+  name: Clear TTS cache
+  description: Remove all cached TTS audio files.

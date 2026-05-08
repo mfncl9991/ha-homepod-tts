@@ -25,34 +25,44 @@ from homeassistant.helpers.selector import (
 )
 
 from .const import (
+    CONF_CACHE_ENABLED,
+    CONF_CACHE_MAX_MB,
     CONF_CHIME_ENABLED,
+    CONF_CHIME_OFFSET,
     CONF_CHIME_PATH,
+    CONF_CHIME_VOLUME,
     CONF_COMPRESS_TTS,
     CONF_DEFAULT_VOLUME,
     CONF_GEMINI_API_KEY,
     CONF_HOMEPOD_IDENTIFIER,
     CONF_RESTORE_VOLUME,
+    CONF_TTS_MODEL,
+    CONF_TTS_PROMPT,
     CONF_TTS_VOICE,
+    COMPRESS_PRESETS,
+    DEFAULT_CACHE_ENABLED,
+    DEFAULT_CACHE_MAX_MB,
     DEFAULT_CHIME_ENABLED,
+    DEFAULT_CHIME_OFFSET,
+    DEFAULT_CHIME_VOLUME,
     DEFAULT_COMPRESS_TTS,
     DEFAULT_RESTORE_VOLUME,
+    DEFAULT_TTS_MODEL,
+    DEFAULT_TTS_PROMPT,
     DEFAULT_TTS_VOICE,
     DEFAULT_VOLUME,
     DOMAIN,
+    GEMINI_TTS_MODELS,
+    GEMINI_VOICES,
 )
 from .tts_client import GeminiTTSClient
 
 _LOGGER = logging.getLogger(__name__)
 
-GEMINI_VOICES = [
-    "Aoede", "Charon", "Fenrir", "Kore", "Leda",
-    "Orus", "Phoebe", "Zephyr",
-]
-
 
 class HomePodTTSConfigFlow(ConfigFlow, domain=DOMAIN):
 
-    VERSION = 1
+    VERSION = 2
 
     @staticmethod
     @callback
@@ -129,17 +139,75 @@ class HomePodTTSOptionsFlow(OptionsFlow):
 
         options = self.config_entry.options
 
+        compress_options = [
+            {"value": k, "label": k.capitalize()}
+            for k in COMPRESS_PRESETS
+        ]
+
         schema = vol.Schema(
             {
+                vol.Optional(
+                    CONF_TTS_MODEL,
+                    default=options.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=GEMINI_TTS_MODELS,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_TTS_VOICE,
+                    default=options.get(CONF_TTS_VOICE, DEFAULT_TTS_VOICE),
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=GEMINI_VOICES,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                vol.Optional(
+                    CONF_TTS_PROMPT,
+                    description={
+                        "suggested_value": options.get(
+                            CONF_TTS_PROMPT, DEFAULT_TTS_PROMPT
+                        )
+                    },
+                ): TextSelector(
+                    TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
                 vol.Optional(
                     CONF_CHIME_ENABLED,
                     default=options.get(CONF_CHIME_ENABLED, DEFAULT_CHIME_ENABLED),
                 ): bool,
                 vol.Optional(
                     CONF_CHIME_PATH,
-                    description={"suggested_value": options.get(CONF_CHIME_PATH, "")},
+                    description={
+                        "suggested_value": options.get(CONF_CHIME_PATH, "")
+                    },
                 ): TextSelector(
                     TextSelectorConfig(type=TextSelectorType.TEXT)
+                ),
+                vol.Optional(
+                    CONF_CHIME_VOLUME,
+                    default=options.get(CONF_CHIME_VOLUME, DEFAULT_CHIME_VOLUME),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=0.0,
+                        max=2.0,
+                        step=0.1,
+                        mode=NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Optional(
+                    CONF_CHIME_OFFSET,
+                    default=options.get(CONF_CHIME_OFFSET, DEFAULT_CHIME_OFFSET),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=-5000,
+                        max=5000,
+                        step=100,
+                        unit_of_measurement="ms",
+                        mode=NumberSelectorMode.SLIDER,
+                    )
                 ),
                 vol.Optional(
                     CONF_DEFAULT_VOLUME,
@@ -157,18 +225,30 @@ class HomePodTTSOptionsFlow(OptionsFlow):
                     default=options.get(CONF_RESTORE_VOLUME, DEFAULT_RESTORE_VOLUME),
                 ): bool,
                 vol.Optional(
-                    CONF_TTS_VOICE,
-                    default=options.get(CONF_TTS_VOICE, DEFAULT_TTS_VOICE),
+                    CONF_COMPRESS_TTS,
+                    default=options.get(CONF_COMPRESS_TTS, DEFAULT_COMPRESS_TTS),
                 ): SelectSelector(
                     SelectSelectorConfig(
-                        options=GEMINI_VOICES,
+                        options=compress_options,
                         mode=SelectSelectorMode.DROPDOWN,
                     )
                 ),
                 vol.Optional(
-                    CONF_COMPRESS_TTS,
-                    default=options.get(CONF_COMPRESS_TTS, DEFAULT_COMPRESS_TTS),
+                    CONF_CACHE_ENABLED,
+                    default=options.get(CONF_CACHE_ENABLED, DEFAULT_CACHE_ENABLED),
                 ): bool,
+                vol.Optional(
+                    CONF_CACHE_MAX_MB,
+                    default=options.get(CONF_CACHE_MAX_MB, DEFAULT_CACHE_MAX_MB),
+                ): NumberSelector(
+                    NumberSelectorConfig(
+                        min=10,
+                        max=2000,
+                        step=10,
+                        unit_of_measurement="MB",
+                        mode=NumberSelectorMode.SLIDER,
+                    )
+                ),
             }
         )
 
