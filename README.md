@@ -88,6 +88,21 @@ data:
   offset: -1000              # optional, trim 1s from chime tail
 ```
 
+### Multi-Speaker (parallel streaming)
+
+```yaml
+action: homepod_tts.say
+data:
+  entity_id: notify.homepod_mini_hall
+  message: "Uwaga, ważne ogłoszenie!"
+  speaker:
+    - media_player.homepod_mini_hall
+    - media_player.homepod_mini_bedroom
+    - media_player.homepod_living_room
+```
+
+All speakers receive the same WAV simultaneously via `asyncio.gather`. Not sample-accurate sync (no shared AirPlay 2 clock), but within ~100-200ms -- imperceptible for voice announcements.
+
 ### Clear TTS Cache
 
 ```yaml
