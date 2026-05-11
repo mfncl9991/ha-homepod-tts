@@ -525,33 +525,13 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             "Playing via Music Assistant: %s -> %s", url, speakers
         )
 
-        # Read current volumes so we can restore them afterwards
-        orig_volumes: dict[str, float | None] = {}
-        for spk in speakers:
-            state = self._hass.states.get(spk)
-            orig_volumes[spk] = (
-                state.attributes.get("volume_level") if state else None
-            )
-
-        # Set per-speaker volumes in parallel (mini gets scaled independently)
-        async def _set_vol(entity_id: str, vol: float) -> None:
-            await self._hass.services.async_call(
-                "media_player",
-                "volume_set",
-                {"volume_level": vol},
-                target={"entity_id": entity_id},
-            )
-
-        await asyncio.gather(*(
-            _set_vol(spk, self._scaled_volume(volume, self._is_mini(spk)))
-            for spk in speakers
-        ))
-
-        # Single play_announcement call — no announce_volume so MA plays at
-        # each speaker's current (pre-set) level, preserving AirPlay 2 sync
+        # Single call so MA coordinates AirPlay 2 synchronized playback.
+        # MA's play_announcement does not support per-speaker volumes, so
+        # announce_volume applies uniformly to all targets.
         service_data: dict[str, Any] = {
             "url": url,
             "use_pre_announce": False,
+            "announce_volume": int(volume * 100),
         }
         await self._hass.services.async_call(
             "music_assistant",
@@ -560,13 +540,6 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             target={"entity_id": speakers},
             blocking=True,
         )
-
-        # Restore original per-speaker volumes in parallel
-        await asyncio.gather(*(
-            _set_vol(spk, orig_vol)
-            for spk, orig_vol in orig_volumes.items()
-            if orig_vol is not None
-        ))
 
         # Schedule cleanup of the served file after a delay
         async def _cleanup() -> None:
@@ -978,30 +951,10 @@ class HomePodTTSNotifyEntity(NotifyEntity):
 
         _LOGGER.debug("Playing music via MA: %s -> %s", url, speakers)
 
-        # Per-speaker volume (mini scaling), then single MA call
-        orig_volumes: dict[str, float | None] = {}
-        for spk in speakers:
-            state = self._hass.states.get(spk)
-            orig_volumes[spk] = (
-                state.attributes.get("volume_level") if state else None
-            )
-
-        async def _set_vol(entity_id: str, vol: float) -> None:
-            await self._hass.services.async_call(
-                "media_player",
-                "volume_set",
-                {"volume_level": vol},
-                target={"entity_id": entity_id},
-            )
-
-        await asyncio.gather(*(
-            _set_vol(spk, self._scaled_volume(volume, self._is_mini(spk)))
-            for spk in speakers
-        ))
-
         service_data: dict[str, Any] = {
             "url": url,
             "use_pre_announce": False,
+            "announce_volume": int(volume * 100),
         }
         await self._hass.services.async_call(
             "music_assistant",
@@ -1010,12 +963,6 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             target={"entity_id": speakers},
             blocking=True,
         )
-
-        await asyncio.gather(*(
-            _set_vol(spk, orig_vol)
-            for spk, orig_vol in orig_volumes.items()
-            if orig_vol is not None
-        ))
 
         async def _cleanup() -> None:
             await asyncio.sleep(120)
