@@ -370,11 +370,22 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                         identifier, mac_map
                     )
                     result.extend(resolved)
-                if result:
+                available_result = [
+                    eid for eid in result
+                    if self._hass.states.get(eid) is not None
+                    and self._hass.states.get(eid).state != "unavailable"
+                ]
+                if available_result:
                     _LOGGER.debug(
-                        "Using configured default speakers: %s", result
+                        "Using configured default speakers: %s", available_result
                     )
-                    return result
+                    return available_result
+                if result:
+                    _LOGGER.warning(
+                        "All default MA speakers unavailable (%s), "
+                        "pyatv fallback will be used", result,
+                    )
+                    return []
             # Fallback to the single configured HomePod
             return self._find_ma_entity_by_mac(
                 self._identifier, mac_map
@@ -404,7 +415,20 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             if r not in seen:
                 seen.add(r)
                 unique.append(r)
-        return unique
+
+        # Filter out unavailable MA entities so the pyatv fallback triggers
+        # when MA hasn't reconnected after an HA restart.
+        available = [
+            eid for eid in unique
+            if self._hass.states.get(eid) is not None
+            and self._hass.states.get(eid).state != "unavailable"
+        ]
+        if not available and unique:
+            _LOGGER.warning(
+                "All MA speakers unavailable (%s), pyatv fallback will be used",
+                unique,
+            )
+        return available
 
     def _find_ma_entity_by_mac(
         self, identifier: str, mac_map: dict[str, str]
