@@ -10,15 +10,14 @@ from pathlib import Path
 from typing import Any
 
 import pyatv
-from pyatv.interface import AppleTV
-
 from homeassistant.components.notify import NotifyEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from pyatv.interface import AppleTV
 
 from .audio import async_generate_wav
 from .cache import (
@@ -28,16 +27,20 @@ from .cache import (
     put_cache,
 )
 from .const import (
+    BUILTIN_CHIMES,
     CONF_CACHE_ENABLED,
     CONF_CACHE_MAX_MB,
     CONF_CHIME_ENABLED,
-    CONF_DEFAULT_SPEAKERS,
     CONF_CHIME_OFFSET,
     CONF_CHIME_PATH,
+    CONF_CHIME_SOUND,
     CONF_CHIME_VOLUME,
     CONF_COMPRESS_TTS,
+    CONF_DEFAULT_SPEAKERS,
     CONF_DEFAULT_VOLUME,
     CONF_GEMINI_API_KEY,
+    CONF_HA_TTS_LANGUAGE,
+    CONF_HA_TTS_VOICE,
     CONF_HOMEPOD_IDENTIFIER,
     CONF_MINI_VOLUME_SCALE,
     CONF_MUTE_ENTITY,
@@ -47,6 +50,7 @@ from .const import (
     CONF_QUIET_SPEAKERS,
     CONF_QUIET_VOLUME,
     CONF_RESTORE_VOLUME,
+    CONF_TTS_ENGINE,
     CONF_TTS_MODEL,
     CONF_TTS_PROMPT,
     CONF_TTS_VOICE,
@@ -54,6 +58,7 @@ from .const import (
     DEFAULT_CACHE_MAX_MB,
     DEFAULT_CHIME_ENABLED,
     DEFAULT_CHIME_OFFSET,
+    DEFAULT_CHIME_SOUND,
     DEFAULT_CHIME_VOLUME,
     DEFAULT_COMPRESS_TTS,
     DEFAULT_MINI_VOLUME_SCALE,
@@ -61,14 +66,16 @@ from .const import (
     DEFAULT_QUIET_PROMPT,
     DEFAULT_QUIET_VOLUME,
     DEFAULT_RESTORE_VOLUME,
+    DEFAULT_TTS_ENGINE,
     DEFAULT_TTS_MODEL,
     DEFAULT_TTS_PROMPT,
     DEFAULT_TTS_VOICE,
     DEFAULT_VOLUME,
     DOMAIN,
     MINI_SPEAKER_LABEL,
+    TTS_ENGINE_GEMINI,
 )
-from .tts_client import GeminiTTSClient
+from .tts_client import GeminiTTSClient, HATTSClient
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -111,6 +118,7 @@ def _parse_music_injection(
 
     return clean_message, music_prompt, position
 
+
 # Directory under /config/www/ for serving WAVs to Music Assistant
 MA_SERVE_DIR = "homepod_tts"
 
@@ -131,7 +139,6 @@ async def async_setup_entry(
 
 
 class HomePodTTSNotifyEntity(NotifyEntity):
-
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._hass = hass
         self._entry = entry
@@ -150,15 +157,23 @@ class HomePodTTSNotifyEntity(NotifyEntity):
 
     @property
     def _api_key(self) -> str:
-        return self._entry.data[CONF_GEMINI_API_KEY]
+        return self._entry.data.get(CONF_GEMINI_API_KEY, "")
 
     @property
     def _chime_enabled(self) -> bool:
         return self._entry.options.get(CONF_CHIME_ENABLED, DEFAULT_CHIME_ENABLED)
 
     @property
+    def _chime_sound(self) -> str:
+        return self._entry.options.get(CONF_CHIME_SOUND, DEFAULT_CHIME_SOUND)
+
+    @property
     def _chime_path(self) -> str:
-        return self._entry.options.get(CONF_CHIME_PATH, "") or DEFAULT_CHIME_FILE
+        sound = self._chime_sound
+        if sound == "custom":
+            return self._entry.options.get(CONF_CHIME_PATH, "") or DEFAULT_CHIME_FILE
+        filename = BUILTIN_CHIMES.get(sound, BUILTIN_CHIMES["chime"])
+        return str(Path(__file__).parent / "sounds" / filename)
 
     @property
     def _chime_volume(self) -> float:
@@ -173,8 +188,20 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         return self._entry.options.get(CONF_RESTORE_VOLUME, DEFAULT_RESTORE_VOLUME)
 
     @property
+    def _engine(self) -> str:
+        return self._entry.options.get(CONF_TTS_ENGINE, DEFAULT_TTS_ENGINE)
+
+    @property
     def _voice(self) -> str:
         return self._entry.options.get(CONF_TTS_VOICE, DEFAULT_TTS_VOICE)
+
+    @property
+    def _ha_tts_voice(self) -> str:
+        return self._entry.options.get(CONF_HA_TTS_VOICE, "")
+
+    @property
+    def _ha_tts_language(self) -> str:
+        return self._entry.options.get(CONF_HA_TTS_LANGUAGE, "")
 
     @property
     def _model(self) -> str:
@@ -247,18 +274,20 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         effective_chime_volume = (
             self._quiet_chime_volume if is_quiet else self._chime_volume
         )
-        effective_prompt = (
-            self._quiet_prompt if is_quiet else self._default_prompt
-        )
+        effective_prompt = self._quiet_prompt if is_quiet else self._default_prompt
         effective_speakers = (
-            self._quiet_speakers if (is_quiet and self._quiet_speakers)
+            self._quiet_speakers
+            if (is_quiet and self._quiet_speakers)
             else self._default_speakers
         )
 
         return {
             # -- TTS --
+            "tts_engine": self._engine,
             "tts_model": self._model,
             "tts_voice": self._voice,
+            "ha_tts_voice": self._ha_tts_voice or None,
+            "ha_tts_language": self._ha_tts_language or None,
             "tts_prompt": self._default_prompt or None,
             # -- Volume --
             "volume": self._volume,
@@ -266,6 +295,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             "effective_volume": round(effective_volume, 3),
             # -- Chime --
             "chime_enabled": self._chime_enabled,
+            "chime_sound": self._chime_sound,
             "chime_volume": self._chime_volume,
             "chime_offset_ms": self._chime_offset,
             "effective_chime_volume": round(effective_chime_volume, 3),
@@ -308,9 +338,25 @@ class HomePodTTSNotifyEntity(NotifyEntity):
 
     # -- TTS client --
 
-    def _get_tts_client(self) -> GeminiTTSClient:
+    def _get_tts_client(self) -> GeminiTTSClient | HATTSClient:
+        engine = self._engine
+        if engine != TTS_ENGINE_GEMINI:
+            if (
+                not isinstance(self._tts_client, HATTSClient)
+                or self._tts_client.engine != engine
+                or self._tts_client.voice != self._ha_tts_voice
+                or self._tts_client.language != (self._ha_tts_language or None)
+            ):
+                self._tts_client = HATTSClient(
+                    self._hass,
+                    engine,
+                    self._ha_tts_language or None,
+                    self._ha_tts_voice or None,
+                )
+            return self._tts_client
+
         if (
-            self._tts_client is None
+            not isinstance(self._tts_client, GeminiTTSClient)
             or self._tts_client.voice != self._voice
             or self._tts_client.model != self._model
         ):
@@ -320,13 +366,19 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             )
         return self._tts_client
 
+    def _get_music_client(self) -> GeminiTTSClient | None:
+        """Music generation (Lyria) is only available via Gemini."""
+        api_key = self._entry.data.get(CONF_GEMINI_API_KEY, "")
+        if not api_key:
+            return None
+        session = async_get_clientsession(self._hass)
+        return GeminiTTSClient(api_key, session, self._voice, self._model)
+
     # -- Music Assistant speaker resolution --
 
     def _has_music_assistant(self) -> bool:
         """Check if Music Assistant is available."""
-        return self._hass.services.has_service(
-            "music_assistant", "play_announcement"
-        )
+        return self._hass.services.has_service("music_assistant", "play_announcement")
 
     def _build_mac_to_ma_map(self) -> dict[str, str]:
         """Build a MAC-address -> MA entity_id mapping.
@@ -344,19 +396,14 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         mac_map: dict[str, str] = {}
         registry = er.async_get(self._hass)
         for entry in registry.entities.values():
-            if (
-                entry.platform == "music_assistant"
-                and entry.domain == "media_player"
-            ):
+            if entry.platform == "music_assistant" and entry.domain == "media_player":
                 uid = entry.unique_id or ""
                 if uid.startswith("ap"):
                     mac_norm = uid[2:]  # strip "ap" prefix
                     mac_map[mac_norm] = entry.entity_id
         return mac_map
 
-    def _resolve_ma_speakers(
-        self, speaker: str | list[str] | None
-    ) -> list[str]:
+    def _resolve_ma_speakers(self, speaker: str | list[str] | None) -> list[str]:
         """Resolve speaker field to MA media_player entity_ids."""
         mac_map = self._build_mac_to_ma_map()
         ma_entity_ids = set(mac_map.values())
@@ -366,12 +413,11 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                 # Default speakers are stored as apple_tv identifiers (MACs)
                 result: list[str] = []
                 for identifier in self._default_speakers:
-                    resolved = self._find_ma_entity_by_mac(
-                        identifier, mac_map
-                    )
+                    resolved = self._find_ma_entity_by_mac(identifier, mac_map)
                     result.extend(resolved)
                 available_result = [
-                    eid for eid in result
+                    eid
+                    for eid in result
                     if self._hass.states.get(eid) is not None
                     and self._hass.states.get(eid).state != "unavailable"
                 ]
@@ -383,13 +429,12 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                 if result:
                     _LOGGER.warning(
                         "All default MA speakers unavailable (%s), "
-                        "pyatv fallback will be used", result,
+                        "pyatv fallback will be used",
+                        result,
                     )
                     return []
             # Fallback to the single configured HomePod
-            return self._find_ma_entity_by_mac(
-                self._identifier, mac_map
-            )
+            return self._find_ma_entity_by_mac(self._identifier, mac_map)
 
         if isinstance(speaker, str):
             speaker = [speaker]
@@ -419,7 +464,8 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         # Filter out unavailable MA entities so the pyatv fallback triggers
         # when MA hasn't reconnected after an HA restart.
         available = [
-            eid for eid in unique
+            eid
+            for eid in unique
             if self._hass.states.get(eid) is not None
             and self._hass.states.get(eid).state != "unavailable"
         ]
@@ -437,9 +483,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         mac_norm = identifier.replace(":", "").lower()
         entity_id = mac_map.get(mac_norm)
         if entity_id:
-            _LOGGER.debug(
-                "Matched MA entity %s for MAC %s", entity_id, identifier
-            )
+            _LOGGER.debug("Matched MA entity %s for MAC %s", entity_id, identifier)
             return [entity_id]
         _LOGGER.warning("No MA entity found for MAC %s", identifier)
         return []
@@ -451,23 +495,19 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         entity_registry = er.async_get(self._hass)
         entity_entry = entity_registry.async_get(atv_entity_id)
         if entity_entry and entity_entry.config_entry_id:
-            apple_tv_entries = self._hass.config_entries.async_entries(
-                "apple_tv"
-            )
+            apple_tv_entries = self._hass.config_entries.async_entries("apple_tv")
             for atv_entry in apple_tv_entries:
                 if atv_entry.entry_id == entity_entry.config_entry_id:
                     uid = atv_entry.unique_id or ""
                     return self._find_ma_entity_by_mac(uid, mac_map)
 
-        _LOGGER.warning(
-            "Could not resolve apple_tv entry for %s", atv_entity_id
-        )
+        _LOGGER.warning("Could not resolve apple_tv entry for %s", atv_entity_id)
         return []
 
     # -- HomePod mini volume scaling --
 
     def _is_mini(self, entity_id: str | None) -> bool:
-        """Return True if the entity (or its paired apple_tv entity) has the 'homepod_mini' label.
+        """Return True if the entity has the 'homepod_mini' label.
 
         The label can be placed on either the apple_tv OR the Music Assistant
         media_player entity — both are checked via MAC cross-reference so the
@@ -486,15 +526,14 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             uid = entry.unique_id or ""
             if uid.startswith("ap"):
                 mac_norm = uid[2:]
-                for atv_entry in self._hass.config_entries.async_entries(
-                    "apple_tv"
-                ):
-                    if (
-                        atv_entry.unique_id or ""
-                    ).replace(":", "").lower() == mac_norm:
-                        for atv_entity in registry.entities.get_entries_for_config_entry_id(
-                            atv_entry.entry_id
-                        ):
+                for atv_entry in self._hass.config_entries.async_entries("apple_tv"):
+                    if (atv_entry.unique_id or "").replace(":", "").lower() == mac_norm:
+                        atv_entities = (
+                            registry.entities.get_entries_for_config_entry_id(
+                                atv_entry.entry_id
+                            )
+                        )
+                        for atv_entity in atv_entities:
                             if MINI_SPEAKER_LABEL in atv_entity.labels:
                                 return True
         return False
@@ -545,9 +584,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             base_url = "http://homeassistant.local:8123"
         url = f"{base_url}/local/{MA_SERVE_DIR}/{filename}"
 
-        _LOGGER.debug(
-            "Playing via Music Assistant: %s -> %s", url, speakers
-        )
+        _LOGGER.debug("Playing via Music Assistant: %s -> %s", url, speakers)
 
         # Single call so MA coordinates AirPlay 2 synchronized playback.
         # MA's play_announcement does not support per-speaker volumes, so
@@ -577,9 +614,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
 
     # -- pyatv connections (fallback) --
 
-    def _resolve_speaker_identifier(
-        self, speaker_entity_id: str | None
-    ) -> str:
+    def _resolve_speaker_identifier(self, speaker_entity_id: str | None) -> str:
         """Resolve a media_player entity_id to an apple_tv identifier.
 
         Handles both apple_tv and music_assistant entity IDs so that pyatv
@@ -592,18 +627,14 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         entity_registry = er.async_get(self._hass)
         entity_entry = entity_registry.async_get(speaker_entity_id)
         if entity_entry:
-            apple_tv_entries = self._hass.config_entries.async_entries(
-                "apple_tv"
-            )
+            apple_tv_entries = self._hass.config_entries.async_entries("apple_tv")
             if entity_entry.platform == "music_assistant":
                 # MA unique_id is ap<mac_no_colons> — strip prefix and match
                 uid = entity_entry.unique_id or ""
                 if uid.startswith("ap"):
                     mac_norm = uid[2:]
                     for atv_entry in apple_tv_entries:
-                        atv_uid = (
-                            atv_entry.unique_id or ""
-                        ).replace(":", "").lower()
+                        atv_uid = (atv_entry.unique_id or "").replace(":", "").lower()
                         if atv_uid == mac_norm:
                             return atv_entry.unique_id or atv_entry.entry_id
             elif entity_entry.config_entry_id:
@@ -617,9 +648,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         )
         return self._identifier
 
-    def _resolve_speakers_pyatv(
-        self, speaker: str | list[str] | None
-    ) -> list[str]:
+    def _resolve_speakers_pyatv(self, speaker: str | list[str] | None) -> list[str]:
         """Resolve speaker field to a list of apple_tv identifiers."""
         if not speaker:
             return [self._identifier]
@@ -694,15 +723,11 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                     previous_volume = atv.audio.volume
 
             atv_entity = self._entity_id_for_mac(identifier)
-            effective_vol = self._scaled_volume(
-                volume, self._is_mini(atv_entity)
-            )
+            effective_vol = self._scaled_volume(volume, self._is_mini(atv_entity))
             with contextlib.suppress(Exception):
                 await atv.audio.set_volume(effective_vol * 100)
 
-            _LOGGER.debug(
-                "Streaming %s to HomePod %s", tmp_path, identifier[:12]
-            )
+            _LOGGER.debug("Streaming %s to HomePod %s", tmp_path, identifier[:12])
             await atv.stream.stream_file(tmp_path)
 
         except ConnectionError:
@@ -712,9 +737,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             )
             await self._async_disconnect(identifier)
         except Exception:
-            _LOGGER.exception(
-                "Failed to stream to HomePod %s", identifier[:12]
-            )
+            _LOGGER.exception("Failed to stream to HomePod %s", identifier[:12])
             await self._async_disconnect(identifier)
         finally:
             if previous_volume is not None:
@@ -765,18 +788,24 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             # Override speakers if quiet speakers configured and no explicit speaker
             if not speaker and self._quiet_speakers:
                 speaker = self._quiet_speakers
-                _LOGGER.debug(
-                    "Quiet mode: using quiet speakers %s", speaker
-                )
+                _LOGGER.debug("Quiet mode: using quiet speakers %s", speaker)
             _LOGGER.debug("Quiet mode active")
         use_ma = self._has_music_assistant()
 
         # Parse music injection marker [music: prompt] from message
         clean_message, music_prompt, music_position = _parse_music_injection(message)
+        music_client = self._get_music_client() if music_prompt else None
+        if music_prompt and music_client is None:
+            _LOGGER.warning(
+                "Music injection requested but no Gemini API key is "
+                "configured; skipping music"
+            )
+            music_prompt = None
         if music_prompt:
             _LOGGER.debug(
                 "Music injection detected: prompt=%r position=%s",
-                music_prompt, music_position,
+                music_prompt,
+                music_position,
             )
 
         async with self._lock:
@@ -787,7 +816,9 @@ class HomePodTTSNotifyEntity(NotifyEntity):
 
                 # Check cache (keyed on the clean message without music marker)
                 key = cache_key(
-                    clean_message, tts_client.voice, tts_client.model,
+                    clean_message,
+                    tts_client.voice,
+                    tts_client.model,
                     effective_prompt,
                 )
                 tts_pcm = None
@@ -796,14 +827,12 @@ class HomePodTTSNotifyEntity(NotifyEntity):
 
                 # Fire TTS synthesis and music generation concurrently
                 if tts_pcm is None and music_prompt:
-                    _LOGGER.debug(
-                        "Synthesizing TTS + generating music concurrently"
-                    )
+                    _LOGGER.debug("Synthesizing TTS + generating music concurrently")
                     tts_pcm, music_bytes = await asyncio.gather(
                         tts_client.synthesize(
                             clean_message, prompt=effective_prompt or None
                         ),
-                        tts_client.generate_music(music_prompt),
+                        music_client.generate_music(music_prompt),
                     )
                     if self._cache_enabled:
                         await put_cache(self._hass, key, tts_pcm)
@@ -821,7 +850,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                     # Cache hit for TTS — still need to generate music if requested
                     if music_prompt:
                         _LOGGER.debug("TTS cache hit; generating music separately")
-                        music_bytes = await tts_client.generate_music(music_prompt)
+                        music_bytes = await music_client.generate_music(music_prompt)
                     else:
                         music_bytes = None
 
@@ -835,9 +864,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                         _write_bytes, tmp_music_path, music_bytes
                     )
 
-                fd, tmp_path = tempfile.mkstemp(
-                    suffix=".wav", prefix="homepod_tts_"
-                )
+                fd, tmp_path = tempfile.mkstemp(suffix=".wav", prefix="homepod_tts_")
                 os.close(fd)
 
                 chime_path = self._chime_path if chime else None
@@ -858,15 +885,12 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                     ma_speakers = self._resolve_ma_speakers(speaker)
                     if not ma_speakers:
                         _LOGGER.error(
-                            "No Music Assistant speakers found, "
-                            "falling back to pyatv"
+                            "No Music Assistant speakers found, falling back to pyatv"
                         )
                         use_ma = False
 
                 if use_ma:
-                    await self._async_play_via_ma(
-                        tmp_path, ma_speakers, volume
-                    )
+                    await self._async_play_via_ma(tmp_path, ma_speakers, volume)
                 else:
                     # pyatv transport (fallback)
                     target_ids = self._resolve_speakers_pyatv(speaker)
@@ -881,9 +905,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                         )
                         await asyncio.gather(
                             *(
-                                self._async_stream_to_device(
-                                    tid, tmp_path, volume
-                                )
+                                self._async_stream_to_device(tid, tmp_path, volume)
                                 for tid in target_ids
                             )
                         )
@@ -910,6 +932,11 @@ class HomePodTTSNotifyEntity(NotifyEntity):
             _LOGGER.debug("Muted, ignoring play_music call")
             return
 
+        music_client = self._get_music_client()
+        if music_client is None:
+            _LOGGER.error("Music generation requires a Gemini API key to be configured")
+            return
+
         if volume is None:
             volume = self._volume
 
@@ -918,13 +945,10 @@ class HomePodTTSNotifyEntity(NotifyEntity):
         async with self._lock:
             tmp_path = None
             try:
-                tts_client = self._get_tts_client()
                 _LOGGER.debug("Generating music for: %s", prompt)
-                mp3_bytes = await tts_client.generate_music(prompt)
+                mp3_bytes = await music_client.generate_music(prompt)
 
-                fd, tmp_path = tempfile.mkstemp(
-                    suffix=".mp3", prefix="homepod_music_"
-                )
+                fd, tmp_path = tempfile.mkstemp(suffix=".mp3", prefix="homepod_music_")
                 os.close(fd)
                 await self._hass.async_add_executor_job(
                     _write_bytes, tmp_path, mp3_bytes
@@ -933,9 +957,7 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                 if use_ma:
                     ma_speakers = self._resolve_ma_speakers(speaker)
                     if ma_speakers:
-                        await self._async_play_mp3_via_ma(
-                            tmp_path, ma_speakers, volume
-                        )
+                        await self._async_play_mp3_via_ma(tmp_path, ma_speakers, volume)
                     else:
                         _LOGGER.error("No MA speakers found for music playback")
                 else:

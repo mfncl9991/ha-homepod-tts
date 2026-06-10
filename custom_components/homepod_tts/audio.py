@@ -5,7 +5,6 @@ from homeassistant.components.ffmpeg import get_ffmpeg_manager
 from homeassistant.core import HomeAssistant
 
 from .const import (
-    AIRPLAY_CHANNELS,
     AIRPLAY_SAMPLE_RATE,
     COMPRESS_PRESETS,
     GEMINI_TTS_CHANNELS,
@@ -24,7 +23,12 @@ _ADELAY_1S = "adelay=1000|1000"
 
 async def _get_audio_duration(ffmpeg_bin: str, path: str) -> float:
     proc = await asyncio.create_subprocess_exec(
-        ffmpeg_bin, "-i", path, "-f", "null", "-",
+        ffmpeg_bin,
+        "-i",
+        path,
+        "-f",
+        "null",
+        "-",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
@@ -98,11 +102,18 @@ async def async_generate_wav(
 
         # Input layout: [0]=chime  [1]=tts(pipe:0)  [2]=music(optional)
         cmd = [
-            ffmpeg_bin, "-y",
-            "-i", chime_path,
-            "-f", "s16le", "-ar", str(GEMINI_TTS_SAMPLE_RATE),
-            "-ac", str(GEMINI_TTS_CHANNELS),
-            "-i", "pipe:0",
+            ffmpeg_bin,
+            "-y",
+            "-i",
+            chime_path,
+            "-f",
+            "s16le",
+            "-ar",
+            str(GEMINI_TTS_SAMPLE_RATE),
+            "-ac",
+            str(GEMINI_TTS_CHANNELS),
+            "-i",
+            "pipe:0",
         ]
         pcm_input = tts_pcm  # silence handled by adelay on chime
 
@@ -137,10 +148,16 @@ async def async_generate_wav(
         # No chime — silence goes on whichever segment plays first
         # Input layout: [0]=tts(pipe:0)  [1]=music(optional)
         cmd = [
-            ffmpeg_bin, "-y",
-            "-f", "s16le", "-ar", str(GEMINI_TTS_SAMPLE_RATE),
-            "-ac", str(GEMINI_TTS_CHANNELS),
-            "-i", "pipe:0",
+            ffmpeg_bin,
+            "-y",
+            "-f",
+            "s16le",
+            "-ar",
+            str(GEMINI_TTS_SAMPLE_RATE),
+            "-ac",
+            str(GEMINI_TTS_CHANNELS),
+            "-i",
+            "pipe:0",
         ]
 
         if music_path:

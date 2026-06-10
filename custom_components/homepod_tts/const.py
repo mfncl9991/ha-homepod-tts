@@ -23,6 +23,11 @@ CONF_QUIET_CHIME_VOLUME = "quiet_chime_volume"
 CONF_QUIET_VOLUME = "quiet_volume"
 CONF_QUIET_SPEAKERS = "quiet_speakers"
 
+CONF_TTS_ENGINE = "tts_engine"
+CONF_HA_TTS_VOICE = "ha_tts_voice"
+CONF_HA_TTS_LANGUAGE = "ha_tts_language"
+CONF_CHIME_SOUND = "chime_sound"
+
 DEFAULT_CHIME_ENABLED = True
 DEFAULT_CHIME_VOLUME = 1.0
 DEFAULT_VOLUME = 0.5
@@ -38,14 +43,27 @@ DEFAULT_QUIET_PROMPT = "Speak in a soft, gentle whisper"
 DEFAULT_QUIET_CHIME_VOLUME = 0.3
 DEFAULT_QUIET_VOLUME = 0.25
 
+# TTS engine: either TTS_ENGINE_GEMINI, or the entity_id of any `tts.*`
+# entity configured in HA (e.g. "tts.edge_tts", "tts.google_translate",
+# "tts.piper") — selected dynamically in the options flow.
+TTS_ENGINE_GEMINI = "gemini"
+DEFAULT_TTS_ENGINE = TTS_ENGINE_GEMINI
+
+DEFAULT_CHIME_SOUND = "chime"
+BUILTIN_CHIMES = {
+    "chime": "chime.mp3",
+}
+CHIME_SOUND_OPTIONS = [
+    {"value": "chime", "label": "Default chime"},
+    {"value": "custom", "label": "Custom file path"},
+]
+
 CONF_MINI_VOLUME_SCALE = "mini_volume_scale"
 DEFAULT_MINI_VOLUME_SCALE = 1.0
 # HA label slug the user assigns to HomePod mini media_player entities
 MINI_SPEAKER_LABEL = "homepod_mini"
 
-GEMINI_TTS_BASE_URL = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-)
+GEMINI_TTS_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/"
 
 GEMINI_TTS_MODELS = [
     "gemini-2.5-flash-preview-tts",
@@ -54,13 +72,36 @@ GEMINI_TTS_MODELS = [
 ]
 
 GEMINI_VOICES = [
-    "Achernar", "Achird", "Algenib", "Algieba", "Alnilam",
-    "Aoede", "Autonoe", "Callirrhoe", "Charon", "Despina",
-    "Enceladus", "Erinome", "Fenrir", "Gacrux", "Iapetus",
-    "Kore", "Laomedeia", "Leda", "Orus", "Puck",
-    "Pulcherrima", "Rasalgethi", "Sadachbia", "Sadaltager",
-    "Schedar", "Sulafat", "Umbriel", "Vindemiatrix",
-    "Zephyr", "Zubenelgenubi",
+    "Achernar",
+    "Achird",
+    "Algenib",
+    "Algieba",
+    "Alnilam",
+    "Aoede",
+    "Autonoe",
+    "Callirrhoe",
+    "Charon",
+    "Despina",
+    "Enceladus",
+    "Erinome",
+    "Fenrir",
+    "Gacrux",
+    "Iapetus",
+    "Kore",
+    "Laomedeia",
+    "Leda",
+    "Orus",
+    "Puck",
+    "Pulcherrima",
+    "Rasalgethi",
+    "Sadachbia",
+    "Sadaltager",
+    "Schedar",
+    "Sulafat",
+    "Umbriel",
+    "Vindemiatrix",
+    "Zephyr",
+    "Zubenelgenubi",
 ]
 
 COMPRESS_PRESETS = {

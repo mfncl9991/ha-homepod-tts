@@ -1,6 +1,6 @@
 # HomePod TTS — Custom Home Assistant Integration
 
-A custom Home Assistant integration that plays TTS announcements with an optional chime sound on Apple HomePod, using **Google Gemini TTS** for speech synthesis and **Music Assistant / pyatv** for AirPlay streaming.
+A custom Home Assistant integration that plays TTS announcements with an optional chime sound on Apple HomePod, using **Google Gemini TTS** or any **Home Assistant TTS engine** (Edge TTS, Google Translate, Piper, etc.) for speech synthesis and **Music Assistant / pyatv** for AirPlay streaming.
 
 ## Why?
 
@@ -14,13 +14,16 @@ This integration **bypasses the bug entirely** by:
 ## Features
 
 - Chime + TTS announcements on HomePod via AirPlay
-- **Music injection** — embed a `[music: prompt]` marker in any message to append a generated Lyria 3 music clip
+- **Choice of TTS engine** — Google Gemini TTS, or any `tts.*` engine already configured in Home Assistant (Edge TTS, Google Translate, Piper, etc.)
+- **Music injection** — embed a `[music: prompt]` marker in any message to append a generated Lyria 3 music clip (Gemini only)
 - **`play_music` service** — generate and play standalone AI music via Gemini Lyria 3
 - Google Gemini TTS with selectable model and voice (30 voices)
-- Style prompts for controlling speech tone and pacing
+- For HA TTS engines, dynamic Language/Voice dropdowns populated from whatever the selected engine supports
+- Style prompts for controlling speech tone and pacing (Gemini only)
 - Dynamic range compression presets (off / light / moderate / heavy)
 - Adjustable chime volume relative to TTS in the audio mix
 - Speaker override — target any HomePod(s) from a single entity
+- Per-entity HomePod mini volume scaling via the `homepod_mini` label
 - **Quiet mode** — lower volume, whisper prompt, and alternate speakers when a quiet-mode entity is active
 - **Mute mode** — completely suppress announcements when a mute entity is active
 - TTS response caching with configurable max size and manual clear
@@ -32,8 +35,8 @@ This integration **bypasses the bug entirely** by:
 
 - Home Assistant 2024.4+
 - Apple TV integration configured with your HomePod(s)
-- Google Gemini API key ([get one here](https://aistudio.google.com/apikey))
 - ffmpeg (included in HAOS by default)
+- Google Gemini API key ([get one here](https://aistudio.google.com/apikey)) — only required if using the Gemini TTS engine or music generation
 - [Music Assistant](https://music-assistant.io/) add-on (optional, enables synchronized AirPlay 2)
 
 ## Installation
@@ -54,32 +57,74 @@ This integration **bypasses the bug entirely** by:
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **HomePod TTS**
-3. Select your default HomePod (from Apple TV integration entries)
-4. Enter your Gemini API key
+3. Select your default HomePod (from Apple TV integration entries — if a
+   HomePod and Apple TV share the same room name, they're disambiguated by
+   their `media_player` entity name, e.g. "Kitchen HomePod" vs "Kitchen
+   Apple TV")
+4. Optionally enter your Gemini API key (only needed for the Gemini TTS
+   engine or music generation — leave empty to use Edge TTS or another HA
+   TTS engine)
 
 ### Options (Settings → Devices → HomePod TTS → Configure)
+
+The options flow is two steps: first pick a **TTS engine**, then configure
+the settings relevant to that engine plus the shared playback/chime/cache
+settings below.
+
+**TTS engine** — either "Gemini" or any `tts.*` engine entity configured in
+Home Assistant (Edge TTS, Google Translate, Piper, etc.).
+
+#### Gemini-only options
 
 | Option | Default | Description |
 |---|---|---|
 | TTS model | gemini-2.5-flash-preview-tts | Gemini model for speech synthesis |
 | TTS voice | Aoede | One of 30 Gemini TTS voices |
 | Style prompt | _(empty)_ | Default style instruction (e.g. "Say this calmly") |
+
+#### HA TTS engine options (Edge TTS, Google Translate, Piper, etc.)
+
+| Option | Default | Description |
+|---|---|---|
+| Language | _(engine default)_ | Dropdown of languages/voices the selected engine supports (free text also accepted) |
+| Voice | _(engine default)_ | Dropdown of voices for the selected language — only shown if the engine exposes a separate voice list |
+
+#### Shared options
+
+| Option | Default | Description |
+|---|---|---|
 | Chime | On | Play chime sound before announcement |
-| Chime path | bundled soft chime | Path to custom chime MP3/WAV |
+| Chime sound | Default chime | Bundled chime, or "Custom file path" to use Chime path below |
+| Chime path | bundled soft chime | Path to custom chime MP3/WAV (used when Chime sound is "Custom file path") |
 | Chime volume | 1.0 | Relative chime loudness in the mix (0.0–2.0) |
 | Chime offset | 0 ms | Trim chime tail (negative) or add gap (positive) |
 | Volume | 0.5 | HomePod playback volume (0.0–1.0) |
+| HomePod mini volume scale | 1.0 | Volume multiplier applied to entities labeled `homepod_mini` (1.0 = same as full-size) |
 | Restore volume | On | Restore previous volume after playback |
 | Compression | moderate | TTS compression preset (off/light/moderate/heavy) |
-| Cache | On | Cache Gemini TTS responses to avoid re-generation |
+| Cache | On | Cache TTS responses to avoid re-generation |
 | Cache max size | 200 MB | Automatic LRU eviction above this limit |
 | Default speakers | _(from config)_ | One or more apple_tv media_player entities |
 | Mute entity | _(none)_ | When this entity is `on`, all announcements are suppressed |
 | Quiet mode entity | _(none)_ | When `on`, quiet mode overrides are applied |
 | Quiet volume | 0.2 | Volume used in quiet mode |
-| Quiet prompt | _(whisper)_ | Style prompt used in quiet mode |
+| Quiet prompt | _(whisper)_ | Style prompt used in quiet mode (Gemini only) |
 | Quiet chime volume | 0.3 | Chime volume used in quiet mode |
 | Quiet speakers | _(none)_ | Alternate speaker(s) used in quiet mode |
+
+### Using a custom chime sound
+
+Only one chime is bundled with the integration. To use a different chime
+(e.g. a "ding-dong" or doorbell-style sound), set **Chime sound** to
+"Custom file path" and point **Chime path** at any MP3/WAV file accessible
+to Home Assistant, for example:
+
+- A file you've placed under `/config/www/` (referenced as
+  `/config/www/chimes/ding_dong.mp3`)
+- One of the sound files bundled with the
+  [Chime TTS](https://github.com/nimroddolev/chime_tts) integration, e.g.
+  `/config/custom_components/chime_tts/sounds/dingdong.mp3` (check that
+  integration's `sounds/` directory for available options)
 
 ## Usage
 
@@ -224,13 +269,17 @@ Lyria 3 MP3 (optional, from [music:] marker or play_music service) ────�
 - ffmpeg runs every call so chime/compression/music changes never invalidate the TTS cache
 - TTS and Lyria music generation run **concurrently** via `asyncio.gather` when music injection is used
 
-## Available TTS Models
+## Available Gemini TTS Models
 
 | Model | Description |
 |---|---|
 | `gemini-2.5-flash-preview-tts` | Low-latency, good quality (default) |
 | `gemini-2.5-pro-preview-tts` | Higher fidelity, slower |
 | `gemini-3.1-flash-tts-preview` | Latest generation, 70+ languages |
+
+For HA TTS engines (Edge TTS, Google Translate, Piper, etc.), the available
+languages and voices come from that engine itself and are populated
+automatically in the Language/Voice dropdowns.
 
 ## Quiet Mode & Mute
 

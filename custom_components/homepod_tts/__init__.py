@@ -1,11 +1,10 @@
 import logging
 
+import homeassistant.helpers.config_validation as cv
 import voluptuous as vol
-
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ConfigEntryNotReady
-import homeassistant.helpers.config_validation as cv
 
 from .const import DOMAIN, PLATFORMS
 
@@ -65,9 +64,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Verify apple_tv integration is ready (our speakers depend on it)
     apple_tv_entries = hass.config_entries.async_entries("apple_tv")
     if not apple_tv_entries:
-        raise ConfigEntryNotReady(
-            "Apple TV integration not yet available, will retry"
-        )
+        raise ConfigEntryNotReady("Apple TV integration not yet available, will retry")
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = {}
@@ -76,9 +73,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     except Exception as err:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-        raise ConfigEntryNotReady(
-            f"Platform setup failed, will retry: {err}"
-        ) from err
+        raise ConfigEntryNotReady(f"Platform setup failed, will retry: {err}") from err
 
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
@@ -94,7 +89,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         chime_volume = call.data.get(ATTR_CHIME_VOLUME)
         quiet = call.data.get(ATTR_QUIET)
 
-        for eid, data in hass.data[DOMAIN].items():
+        for data in hass.data[DOMAIN].values():
             entity = data.get("entity")
             if entity is not None and entity.entity_id == entity_id:
                 await entity.async_play_tts(
@@ -118,7 +113,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         volume = call.data.get(ATTR_VOLUME_LEVEL)
         speaker = call.data.get(ATTR_SPEAKER)
 
-        for eid, data in hass.data[DOMAIN].items():
+        for data in hass.data[DOMAIN].values():
             entity = data.get("entity")
             if entity is not None and entity.entity_id == entity_id:
                 await entity.async_play_music(
@@ -132,6 +127,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_handle_clear_cache(call: ServiceCall) -> None:
         from .cache import async_clear_cache
+
         count = await async_clear_cache(hass)
         _LOGGER.info("Cache cleared: %d entries removed", count)
 
@@ -178,14 +174,10 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             new_options["compress_tts"] = (
                 "moderate" if new_options["compress_tts"] else "off"
             )
-        hass.config_entries.async_update_entry(
-            entry, options=new_options, version=2
-        )
+        hass.config_entries.async_update_entry(entry, options=new_options, version=2)
         _LOGGER.info("Migration to v2 complete")
     return True
 
 
-async def _async_update_listener(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> None:
+async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)
