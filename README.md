@@ -134,7 +134,7 @@ to Home Assistant, for example:
 action: homepod_tts.say
 data:
   entity_id: notify.homepod_mini_hall
-  message: "Paczka czeka w skrytce numer 5"
+  message: "Package delivered, check the front porch"
   volume_level: 0.55        # optional override
   chime: true               # optional override
   compress: moderate        # off | light | moderate | heavy
@@ -153,7 +153,7 @@ Embed a `[music: prompt]` marker anywhere in your message to generate and append
 action: homepod_tts.say
 data:
   entity_id: notify.homepod_mini_hall
-  message: "Kubuś, oto nowa piosenka dla Ciebie! [music: happy upbeat children's song about monkeys in the jungle]"
+  message: "Hey, here's a new song for you! [music: happy upbeat children's song about monkeys in the jungle]"
 ```
 
 **Position detection:**
@@ -182,7 +182,7 @@ Music is generated via Gemini Lyria 3 (`lyria-3-clip-preview`) and played via Mu
 action: homepod_tts.say
 data:
   entity_id: notify.homepod_mini_hall
-  message: "Uwaga, ważne ogłoszenie!"
+  message: "Attention, important announcement!"
   speaker:
     - media_player.homepod_mini_hall
     - media_player.homepod_mini_bedroom
@@ -204,7 +204,7 @@ action: notify.send_message
 target:
   entity_id: notify.homepod_mini_hall
 data:
-  message: "Paczka czeka w skrytce numer 5"
+  message: "Package delivered, check the front porch"
 ```
 
 ### Automation Example — AI Bedtime Announcement
@@ -241,7 +241,7 @@ data:
         task_name: Generate song lyrics
         model: conversation.claude
         instructions: >
-          Write short, fun children's song lyrics in Polish about: {{ trigger.to_state.state }}.
+          Write short, fun children's song lyrics about: {{ trigger.to_state.state }}.
           Output only the lyrics, no title or metadata.
       response_variable: song
     - action: homepod_tts.say

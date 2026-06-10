@@ -14,7 +14,7 @@ say:
       name: Message
       description: The text to speak.
       required: true
-      example: "Paczka czeka w skrytce numer 5"
+      example: "Package delivered, check the front porch"
       selector:
         text:
     prompt:
