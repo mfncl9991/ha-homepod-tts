@@ -11,6 +11,7 @@ from homeassistant.config_entries import (
 from homeassistant.const import CONF_NAME
 from homeassistant.core import callback
 from homeassistant.data_entry_flow import FlowResult
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
@@ -125,10 +126,11 @@ def _apple_tv_device_options(hass) -> list[dict[str, str]]:
     `apple_tv` config entries are titled after the device's name in Apple's
     ecosystem, which is often just the room (e.g. "Kitchen") — so a HomePod
     and an Apple TV in the same room get identical titles. Disambiguate using
-    the associated media_player entity's name (e.g. "Kitchen HomePod" vs
-    "Kitchen Apple TV").
+    the associated device's registry name (e.g. "Kitchen HomePod" vs
+    "Kitchen Apple TV"), which is where that distinct name actually lives.
     """
     ent_reg = er.async_get(hass)
+    dev_reg = dr.async_get(hass)
     options = []
     for entry in hass.config_entries.async_entries("apple_tv"):
         if not entry.title:
@@ -136,7 +138,10 @@ def _apple_tv_device_options(hass) -> list[dict[str, str]]:
         label = entry.title
         for entity in er.async_entries_for_config_entry(ent_reg, entry.entry_id):
             if entity.entity_id.startswith("media_player."):
-                label = entity.name or entity.original_name or label
+                if entity.device_id:
+                    device = dev_reg.async_get(entity.device_id)
+                    if device:
+                        label = device.name_by_user or device.name or label
                 break
         options.append({"value": entry.unique_id or entry.entry_id, "label": label})
     return options
