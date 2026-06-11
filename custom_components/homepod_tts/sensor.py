@@ -1,4 +1,5 @@
 """Music Assistant health sensor for HomePod TTS."""
+
 from __future__ import annotations
 
 import logging
@@ -83,9 +84,7 @@ class MusicAssistantHealthSensor(SensorEntity):
         has_ma = self.hass.services.has_service(*MA_ANNOUNCE_SERVICE)
         return {
             "transport": (
-                "music_assistant"
-                if has_ma and self._available
-                else "pyatv_fallback"
+                "music_assistant" if has_ma and self._available else "pyatv_fallback"
             ),
             "available_count": len(self._available),
             "configured_count": len(self._default_speakers),

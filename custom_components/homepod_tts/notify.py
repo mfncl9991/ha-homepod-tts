@@ -121,6 +121,7 @@ def classify_ma_speakers(
 
     return available, unavailable, unresolved
 
+
 # ── Music injection parsing ───────────────────────────────────────────────────
 # Syntax: [music: <prompt>]
 # Example: "Hello! [music: upbeat jazz piano, 30 seconds]"
@@ -454,14 +455,13 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                     self._hass, self._default_speakers
                 )
                 if available:
-                    _LOGGER.debug(
-                        "Using configured default speakers: %s", available
-                    )
+                    _LOGGER.debug("Using configured default speakers: %s", available)
                     return available
                 _LOGGER.warning(
                     "All default MA speakers unavailable (%s unavail, %s unresolved),"
                     " pyatv fallback will be used",
-                    _unavail, _unresolved,
+                    _unavail,
+                    _unresolved,
                 )
                 return []
             # Fallback to the single configured HomePod
