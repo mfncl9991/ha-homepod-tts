@@ -23,9 +23,11 @@ This integration **bypasses the bug entirely** by:
 - Dynamic range compression presets (off / light / moderate / heavy)
 - Adjustable chime volume relative to TTS in the audio mix
 - Speaker override — target any HomePod(s) from a single entity
-- Per-entity HomePod mini volume scaling via the `homepod_mini` label
+- **HomePod mini volume scaling** — per-speaker volume compensation for quieter mini speakers via an entity label
 - **Quiet mode** — lower volume, whisper prompt, and alternate speakers when a quiet-mode entity is active
 - **Mute mode** — completely suppress announcements when a mute entity is active
+- **Music Assistant health sensor** — surfaces whether configured speakers resolve in MA or fall back to pyatv
+- **Operational entity attributes** — the notify entity exposes effective volume, speakers, mute/quiet state, cache and TTS settings for inspection
 - TTS response caching with configurable max size and manual clear
 - Volume control with automatic restore after playback
 - Music Assistant transport for synchronized multi-room AirPlay 2
@@ -99,7 +101,7 @@ Home Assistant (Edge TTS, Google Translate, Piper, etc.).
 | Chime volume | 1.0 | Relative chime loudness in the mix (0.0–2.0) |
 | Chime offset | 0 ms | Trim chime tail (negative) or add gap (positive) |
 | Volume | 0.5 | HomePod playback volume (0.0–1.0) |
-| HomePod mini volume scale | 1.0 | Volume multiplier applied to entities labeled `homepod_mini` (1.0 = same as full-size) |
+| HomePod mini volume scale | 1.0 | Volume multiplier applied to speakers labeled `homepod_mini` (see below). 1.0 = no scaling |
 | Restore volume | On | Restore previous volume after playback |
 | Compression | moderate | TTS compression preset (off/light/moderate/heavy) |
 | Cache | On | Cache TTS responses to avoid re-generation |
@@ -293,6 +295,34 @@ automatically in the Language/Voice dropdowns.
 
 Mute takes precedence over quiet mode. Both can be overridden per-call via the `quiet:` field on `homepod_tts.say`.
 
+## HomePod mini Volume Scaling
+
+HomePod minis are quieter than full-size HomePods at the same volume level. To compensate, assign the Home Assistant label **`homepod_mini`** to the mini's `media_player` entity (either the `apple_tv` entity *or* its Music Assistant entity — the integration cross-references them by MAC, so labeling one is enough).
+
+When a labeled speaker is targeted, the configured **HomePod mini volume scale** multiplier is applied to that speaker's volume (clamped to 0.0–1.0). For example, a scale of `1.4` plays minis 40% louder than full-size speakers at the same requested volume. A scale of `1.0` disables scaling.
+
+> Volume scaling is applied on the **pyatv** transport (per-device volume). The Music Assistant transport applies a single `announce_volume` to all targets, so a mixed mini / full-size group played via MA shares one volume.
+
+## Music Assistant Health Sensor
+
+When **default speakers** are configured, the integration adds a sensor (e.g. `sensor.<name>_ma_health`) that reports whether Music Assistant can serve all of them. This makes it easy to spot when playback has silently fallen back to pyatv — for example after an HA restart before Music Assistant has reconnected.
+
+**States:**
+
+| State | Meaning |
+|---|---|
+| `ok` | All configured default speakers resolve and are available in Music Assistant |
+| `degraded` | MA is available but only some speakers are (partial synchronized playback) |
+| `failed` | MA service is absent or no speakers are available → pyatv fallback is used |
+
+**Attributes:** `transport` (`music_assistant` / `pyatv_fallback`), `available_count`, `configured_count`, `available`, `unavailable`, and `unresolved_macs` (configured MACs with no matching MA entity — useful for diagnosing discovery problems).
+
+The sensor recomputes automatically as `media_player` entities change state.
+
+## Entity Attributes
+
+The notify entity exposes its effective operational configuration as state attributes for dashboards and troubleshooting, including: `tts_model`, `tts_voice`, `tts_prompt`, `volume`, `mini_volume_scale`, `effective_volume`, `chime_enabled`, `chime_volume`, `effective_chime_volume`, `compress_tts`, `default_speakers`, `effective_speakers`, `is_muted`, `is_quiet`, the quiet-mode overrides, and the cache settings. The `effective_*` values reflect quiet-mode overrides when quiet mode is active.
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
