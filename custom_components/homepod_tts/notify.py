@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from pyatv.exceptions import BlockedStateError
 from pyatv.interface import AppleTV
 
 from .audio import async_generate_wav
@@ -764,7 +765,17 @@ class HomePodTTSNotifyEntity(NotifyEntity):
                 await atv.audio.set_volume(effective_vol * 100)
 
             _LOGGER.debug("Streaming %s to HomePod %s", tmp_path, identifier[:12])
-            await atv.stream.stream_file(tmp_path)
+            try:
+                await atv.stream.stream_file(tmp_path)
+            except BlockedStateError:
+                _LOGGER.warning(
+                    "Stream blocked on HomePod %s, reconnecting and retrying",
+                    identifier[:12],
+                )
+                await self._async_disconnect(identifier)
+                await asyncio.sleep(1)
+                atv = await self._async_get_connection(identifier)
+                await atv.stream.stream_file(tmp_path)
 
         except ConnectionError:
             _LOGGER.warning(
